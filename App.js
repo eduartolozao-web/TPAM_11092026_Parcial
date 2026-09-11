@@ -19,18 +19,10 @@ import {
 import { Calendar } from "react-native-calendars";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import * as Notifications from "expo-notifications";
+
 
 const STORAGE_KEY = "gestor_comunicaciones_reuniones_v1";
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
 
 function crearId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -92,7 +84,7 @@ export default function App() {
 
   useEffect(() => {
     cargarDatos();
-    solicitarPermisosNotificaciones();
+    
   }, []);
 
   useEffect(() => {
@@ -119,58 +111,12 @@ export default function App() {
     }
   }
 
-  async function solicitarPermisosNotificaciones() {
-    try {
-      const permisos = await Notifications.getPermissionsAsync();
-
-      if (permisos.status !== "granted") {
-        await Notifications.requestPermissionsAsync();
-      }
-
-      if (Platform.OS === "android") {
-        await Notifications.setNotificationChannelAsync("compromisos", {
-          name: "Recordatorios de compromisos",
-          importance: Notifications.AndroidImportance.HIGH,
-          sound: "default",
-        });
-      }
-    } catch (error) {
-      console.log("Error solicitando permisos:", error);
-    }
-  }
-
+  
   async function programarRecordatorio(compromiso, reunion) {
-    try {
-      const fecha = new Date(compromiso.fechaRecordatorio);
-
-      if (fecha <= new Date()) {
-        return null;
-      }
-
-      const identificador =
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "Compromiso pendiente",
-            body: `${compromiso.texto} · ${reunion.persona}`,
-            data: {
-              reunionId: reunion.id,
-              compromisoId: compromiso.id,
-            },
-            sound: "default",
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DATE,
-            date: fecha,
-            channelId: "compromisos",
-          },
-        });
-
-      return identificador;
-    } catch (error) {
-      console.log("No se pudo programar el recordatorio:", error);
-      return null;
-    }
-  }
+  // En Expo Go guardamos la fecha y hora del compromiso.
+  // La notificación del sistema se habilitará en el APK final.
+  return null;
+  } 
 
   function limpiarFormulario() {
     setPersona("");
@@ -299,7 +245,7 @@ export default function App() {
 
     Alert.alert(
       "Compromiso creado",
-      "El compromiso y su recordatorio fueron registrados."
+      "El compromiso fue registrado. La aplicación lo mostrará en el panel de compromisos y alertas."
     );
   }
 
@@ -308,19 +254,7 @@ export default function App() {
 
     const nuevoEstado = !compromiso.cumplido;
 
-    if (
-      nuevoEstado &&
-      compromiso.notificationId
-    ) {
-      try {
-        await Notifications.cancelScheduledNotificationAsync(
-          compromiso.notificationId
-        );
-      } catch (error) {
-        console.log(error);
-      }
-    }
-
+    
     const compromisosActualizados =
       reunionSeleccionada.compromisos.map((item) =>
         item.id === compromiso.id
