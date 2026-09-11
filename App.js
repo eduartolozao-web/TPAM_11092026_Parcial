@@ -1,3 +1,4 @@
+import Constants from "expo-constants";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -23,6 +24,22 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 
 const STORAGE_KEY = "gestor_comunicaciones_reuniones_v1";
 
+const ES_EXPO_GO = !!Constants.expoGoConfig;
+
+let Notifications = null;
+
+if (!ES_EXPO_GO) {
+  Notifications = require("expo-notifications");
+
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
 
 function crearId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -84,7 +101,9 @@ export default function App() {
 
   useEffect(() => {
     cargarDatos();
-    
+      if (!ES_EXPO_GO) {
+    solicitarPermisosNotificaciones();
+      }
   }, []);
 
   useEffect(() => {
@@ -113,10 +132,41 @@ export default function App() {
 
   
   async function programarRecordatorio(compromiso, reunion) {
-  // En Expo Go guardamos la fecha y hora del compromiso.
-  // La notificación del sistema se habilitará en el APK final.
-  return null;
-  } 
+  if (ES_EXPO_GO || !Notifications) {
+    return null;
+  }
+
+  try {
+    const fecha = new Date(compromiso.fechaRecordatorio);
+
+    if (fecha <= new Date()) {
+      return null;
+    }
+
+    const identificador =
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Compromiso pendiente",
+          body: `${compromiso.texto} · ${reunion.persona}`,
+          data: {
+            reunionId: reunion.id,
+            compromisoId: compromiso.id,
+          },
+          sound: "default",
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: fecha,
+          channelId: "compromisos",
+        },
+      });
+
+    return identificador;
+  } catch (error) {
+    console.log("Error programando recordatorio:", error);
+    return null;
+  }
+} 
 
   function limpiarFormulario() {
     setPersona("");
@@ -940,6 +990,30 @@ export default function App() {
       </View>
     </SafeAreaView>
   );
+  async function solicitarPermisosNotificaciones() {
+  if (ES_EXPO_GO || !Notifications) return;
+
+  try {
+    const permisos = await Notifications.getPermissionsAsync();
+
+    if (permisos.status !== "granted") {
+      await Notifications.requestPermissionsAsync();
+    }
+
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync(
+        "compromisos",
+        {
+          name: "Recordatorios de compromisos",
+          importance: Notifications.AndroidImportance.HIGH,
+          sound: "default",
+        }
+      );
+    }
+  } catch (error) {
+    console.log("Error configurando notificaciones:", error);
+  }
+}
 }
 
 function FormLabel({ texto, requerido }) {
